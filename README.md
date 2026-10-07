@@ -10,14 +10,16 @@ Right-click any zip, rar, 7z, tar or gz file and choose **Extract All (7-Zip)**,
 
 Free. No account and no ads. If 7-Zip isn't installed, it's downloaded for you from its official source.
 
-## How to use
+## How to use (one click)
 
 1. Unzip the download anywhere.
-2. Double-click **`Extract All with 7-Zip.cmd`** and click **Yes** when Windows asks for administrator permission.
+2. Double-click **`Extract All with 7-Zip.cmd`** and click **Yes** when Windows asks for permission.
    > If Windows shows *"Windows protected your PC"*, click **More info → Run anyway**. Windows shows this for any downloaded script that isn't from a large publisher.
-3. Click **Install / Apply**. When it asks, let it restart File Explorer.
+3. Wait about 30 seconds. It sets everything up by itself and says **"All done!"**
 
-That's it. Right-click any archive to see **Extract All (7-Zip)**.
+That's it. Right-click any archive and choose **Extract All (7-Zip)**.
+
+To change options or go back to the Windows default later, double-click **`Options and Undo.cmd`**.
 
 ## What it sets up
 
@@ -25,8 +27,8 @@ That's it. Right-click any archive to see **Extract All (7-Zip)**.
 |---|---|
 | ✅ Right-click **Extract All (7-Zip)** | Right under *Share with*, replacing Windows' own *Extract All…* |
 | ✅ Toolbar **Extract all** button | Uses 7-Zip too |
-| ☑️ Hide *Ask Copilot* from the right-click menu | Optional |
-| ☑️ Survives Windows updates | Optional small startup task that puts the settings back if an update undoes them |
+| ✅ Hide *Ask Copilot* from the right-click menu | Can be turned off in *Options and Undo* |
+| ✅ Survives Windows updates | Small startup task that puts the settings back if an update undoes them |
 | ✅ 7-Zip | Downloaded and installed automatically if missing (via `winget`, or from www.7-zip.org) |
 
 Works for zip, 7z, rar, tar, gz, tgz, bz2, xz, zst, lzh, arj, cpio, rpm, deb, dmg, squashfs and split `.001` archives. Select several archives to extract each one into its own folder.
@@ -35,7 +37,7 @@ Works for zip, 7z, rar, tar, gz, tgz, bz2, xz, zst, lzh, arj, cpio, rpm, deb, dm
 
 ## Going back to the Windows default
 
-- Open the tool again and click **Undo – back to Windows default** (tick *Undo also uninstalls 7-Zip* to remove 7-Zip too), **or**
+- Double-click **`Options and Undo.cmd`** and click **Undo – back to Windows default** (tick *Undo also uninstalls 7-Zip* to remove 7-Zip too), **or**
 - **Settings → Apps → Installed apps → Extract All with 7-Zip → Uninstall**.
 
 Undo restores Windows' original right-click menu, toolbar button and file associations.
