@@ -1,4 +1,4 @@
-Extract All with 7-Zip  -  free tool, version 1.0.1
+Extract All with 7-Zip  -  free tool, version 1.0.2
 ====================================================
 
 What it does (Windows 11)
@@ -8,24 +8,24 @@ What it does (Windows 11)
   archive's name, next to the archive. Works on several selected archives at once.
   Windows' own slow "Extract All..." is hidden.
 * The "Extract all" button in File Explorer's toolbar uses 7-Zip too.
-* Hides "Ask Copilot" from the right-click menu               (optional)
-* Keeps all of this after Windows updates (small startup task) (optional)
+* Hides "Ask Copilot" from the right-click menu.
+* Keeps all of this after Windows updates (small startup task).
 * If 7-Zip isn't installed, it is downloaded and installed automatically
   (free, from the official source: winget / www.7-zip.org).
 
-How to use
-----------
+How to use (one click)
+----------------------
 1. Unzip this folder anywhere.
 2. Double-click  "Extract All with 7-Zip.cmd"  and click "Yes" when Windows asks
-   for administrator permission.
+   for permission. That's it - it sets everything up by itself and says "All done".
    (If Windows shows "Windows protected your PC", click "More info" -> "Run anyway".
     That message appears for any downloaded script that isn't from a big publisher.)
-3. Click "Install / Apply". When it asks, let it restart File Explorer.
+3. Right-click any zip/rar/7z file -> "Extract All (7-Zip)".
 
-Going back to the Windows default
----------------------------------
-* Open the tool again and click "Undo - back to Windows default"
-  (tick "Undo also uninstalls 7-Zip" to remove 7-Zip as well), or
+Options, and going back to the Windows default
+----------------------------------------------
+* Double-click  "Options and Undo.cmd"  to choose options or click
+  "Undo - back to Windows default" (tick "Undo also uninstalls 7-Zip" to remove 7-Zip too), or
 * Settings -> Apps -> Installed apps -> "Extract All with 7-Zip" -> Uninstall.
 
 For IT / power users (run in an administrator PowerShell)
@@ -37,7 +37,7 @@ For IT / power users (run in an administrator PowerShell)
 What it changes (all undone by Undo)
 ------------------------------------
 * HKLM\SOFTWARE\Classes\SystemFileAssociations\.<archive type>\shell\extract  (the 7-Zip entry)
-* Shell Extensions\Blocked: Windows' own Extract All handlers (and Ask Copilot, if chosen)
+* Shell Extensions\Blocked: Windows' own Extract All handlers (and Ask Copilot)
 * The toolbar command Windows.CompressedFile.extract (Windows' original is saved and restored)
 * C:\Program Files\Extract All with 7-Zip\  +  startup task "Extract All with 7-Zip keeper"
 * An entry in Settings -> Apps -> Installed apps
@@ -45,10 +45,10 @@ What it changes (all undone by Undo)
 About double-click
 ------------------
 This tool does NOT change which app opens an archive when you DOUBLE-CLICK it. On a home
-(non-domain) PC, Windows only lets YOU set that, to stop programs hijacking your files -
-no app, including this one, can do it silently. To make 7-Zip the double-click default,
-double-click an archive once, pick "7-Zip File Manager" and tick "Always" (per type), or
-set it in Settings > Default apps. The right-click "Extract All (7-Zip)" works regardless.
+(non-domain) PC, Windows only lets the person at the PC set that, to stop programs hijacking
+files - no app, including this one, can do it silently. If you want it: double-click an
+archive once, pick "7-Zip File Manager" and tick "Always". The right-click
+"Extract All (7-Zip)" works either way.
 
 Notes
 -----
