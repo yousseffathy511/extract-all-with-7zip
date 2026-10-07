@@ -1,5 +1,5 @@
 <#
-    Extract All with 7-Zip   -   free tool, version 1.0.0
+    Extract All with 7-Zip   -   free tool, version 1.0.1
     =========================================================
     Makes Windows 11 use 7-Zip for "Extract All":
       * Right-click any archive -> "Extract All (7-Zip)", right under "Share with"
@@ -17,21 +17,21 @@
     How to use:  double-click "Extract All with 7-Zip.cmd"  (asks for administrator permission once)
 
     Command line (works from any PowerShell; asks for admin permission if needed):
-      ExtractAllWith7Zip.ps1 -Install -Silent [-NoToolbar] [-NoDefaultApp] [-NoCopilotHide] [-NoKeeper]
+      ExtractAllWith7Zip.ps1 -Install -Silent [-NoToolbar] [-NoCopilotHide] [-NoKeeper]
       ExtractAllWith7Zip.ps1 -Undo    -Silent [-RemoveSevenZip]
       Add -NoExplorerRestart to skip restarting File Explorer at the end.
 #>
 [CmdletBinding()]
 param(
     [switch]$Install, [switch]$Undo, [switch]$Keep, [switch]$Silent, [switch]$RemoveSevenZip,
-    [switch]$NoToolbar, [switch]$NoDefaultApp, [switch]$NoCopilotHide, [switch]$NoKeeper, [switch]$NoExplorerRestart
+    [switch]$NoToolbar, [switch]$NoCopilotHide, [switch]$NoKeeper, [switch]$NoExplorerRestart
 )
 
 $ErrorActionPreference = 'Stop'
 
 # ------------------------------------------------------------------ constants
 $AppName      = 'Extract All with 7-Zip'
-$AppVersion   = '1.0.0'
+$AppVersion   = '1.0.1'
 $Marker       = 'hidden by Extract All with 7-Zip'
 $InstallDir   = Join-Path $env:ProgramFiles 'Extract All with 7-Zip'
 $ScriptName   = 'ExtractAllWith7Zip.ps1'
@@ -152,14 +152,20 @@ function Install-SevenZip {
     }
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $arch = (Get-CimInstance Win32_Processor | Select-Object -First 1).Architecture
-    $pattern = switch ($arch) { 12 { 'a/7z\d+-arm64\.exe' } 9 { 'a/7z\d+-x64\.exe' } default { 'a/7z\d+\.exe' } }
+    $suffix = switch ($arch) { 12 { '-arm64' } 9 { '-x64' } default { '' } }
     $wc = New-Object System.Net.WebClient
     $wc.Headers.Add('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ExtractAllWith7Zip')
     $html = $wc.DownloadString('https://www.7-zip.org/download.html')
-    $m = [regex]::Match($html, $pattern)
-    if (-not $m.Success) { throw 'Could not find the 7-Zip download on www.7-zip.org.' }
-    $url  = 'https://www.7-zip.org/' + $m.Value
-    $file = Join-Path $env:TEMP ([IO.Path]::GetFileName($m.Value))
+    # The page lists several versions (the newest is hosted on 7-Zip's official GitHub) - pick the newest one.
+    $pattern = '(?:https://github\.com/ip7z/7zip/releases/download/[0-9.]+/|a/)7z(\d{3,4})' + [regex]::Escape($suffix) + '\.exe'
+    $best = $null; $bestVersion = -1
+    foreach ($m in [regex]::Matches($html, $pattern)) {
+        $v = [int]$m.Groups[1].Value
+        if ($v -gt $bestVersion) { $bestVersion = $v; $best = $m.Value }
+    }
+    if (-not $best) { throw 'Could not find the 7-Zip download on www.7-zip.org.' }
+    $url  = if ($best -like 'https://*') { $best } else { 'https://www.7-zip.org/' + $best }
+    $file = Join-Path $env:TEMP ([IO.Path]::GetFileName($best))
     Write-Log "  Downloading $url ..."
     $wc = New-Object System.Net.WebClient
     $wc.Headers.Add('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ExtractAllWith7Zip')
@@ -345,34 +351,20 @@ function Restore-Toolbar {
     Write-Log 'Toolbar "Extract all" button: Windows'' extractor is back.'
 }
 
-# ------------------------------------------------------------------ double-click (default app)
-function Set-DefaultApp([string]$Dir) {
-    $caps = $LM.CreateSubKey($CapsKey)
-    $caps.SetValue('ApplicationName', $RegAppName)
-    $caps.SetValue('ApplicationDescription', 'Opens zip, 7z, rar, tar and other archives with 7-Zip')
-    $caps.SetValue('ApplicationIcon', "$Dir\7zFM.exe,0")
-    $fa = $caps.CreateSubKey('FileAssociations')
-    foreach ($e in $Exts) {
-        $prog = "7-Zip.$e"
-        $pk = $LM.CreateSubKey("SOFTWARE\Classes\$prog")
-        $pk.SetValue('', "$($e.ToUpper()) archive (7-Zip)")
-        $pk.CreateSubKey('DefaultIcon').SetValue('', "$Dir\7z.dll,$($Icons[$e])")
-        $pk.CreateSubKey('shell\open\command').SetValue('', "`"$Dir\7zFM.exe`" `"%1`"")
-        $pk.Close()
-        $ow = $LM.CreateSubKey("SOFTWARE\Classes\.$e\OpenWithProgids"); $ow.SetValue($prog, [byte[]]@(), 'None'); $ow.Close()
-        $fa.SetValue(".$e", $prog)
-        # per-user default - used for every type the user hasn't picked an app for in Settings
-        $ck = $CU.CreateSubKey("Software\Classes\.$e"); $ck.SetValue('', $prog); $ck.Close()
+# ------------------------------------------------------------------ double-click (default app) - cleanup only
+# This tool does NOT change your double-click default app (Windows only lets the user set that for
+# common types like .zip/.rar/.7z). These functions only UNDO any default-app registration a
+# previous build may have made, so Undo fully restores Windows' defaults.
+
+# Cleanup only: remove the default-apps policy if any earlier build set it (it is not used - it only
+# works on company/domain-joined PCs, not home PCs, so this tool does not rely on it).
+function Remove-DefaultAppPolicy {
+    $pol = $LM.OpenSubKey('SOFTWARE\Policies\Microsoft\Windows\System', $true)
+    if ($pol) {
+        if ($null -ne $pol.GetValue('DefaultAssociationsConfiguration')) { $pol.DeleteValue('DefaultAssociationsConfiguration', $false) }
+        $pol.Close()
     }
-    $fa.Close(); $caps.Close()
-    $ra = $LM.CreateSubKey('SOFTWARE\RegisteredApplications'); $ra.SetValue($RegAppName, $CapsKey); $ra.Close()
-    Send-AssocChanged
-    if ([EA7Native]::AssocExe('.zip') -like '*7zFM.exe') {
-        Write-Log 'Double-click opens archives in 7-Zip.'
-    } else {
-        Write-Log 'Double-click: Windows needs you to confirm this once. In Settings > Default apps > 7-Zip File Manager, click "Set default".'
-        if (-not $Silent) { try { Start-Process 'ms-settings:defaultapps?registeredAppMachine=7-Zip%20File%20Manager' } catch { } }
-    }
+    Remove-Item -LiteralPath (Join-Path $InstallDir 'DefaultAssociations.xml') -Force -ErrorAction SilentlyContinue
 }
 
 function Remove-DefaultApp {
@@ -400,8 +392,9 @@ function Remove-DefaultApp {
     }
     $ra = $LM.OpenSubKey('SOFTWARE\RegisteredApplications', $true); if ($ra) { $ra.DeleteValue($RegAppName, $false); $ra.Close() }
     $LM.DeleteSubKeyTree($CapsKey, $false)
+    Remove-DefaultAppPolicy
     Send-AssocChanged
-    Write-Log 'Double-click: 7-Zip file associations removed (Windows default).'
+    Write-Log 'Double-click: 7-Zip default-apps policy removed (Windows default is back after you sign out and back in).'
 }
 
 # ------------------------------------------------------------------ keeper, settings, Apps entry
@@ -433,7 +426,7 @@ function Unregister-Keeper {
 
 function Save-Settings($Opt) {
     $k = $LM.CreateSubKey($SettingsKey)
-    foreach ($n in 'ContextMenu', 'Toolbar', 'DefaultApp', 'HideCopilot', 'Keeper') { $k.SetValue($n, [int][bool]$Opt[$n], 'DWord') }
+    foreach ($n in 'ContextMenu', 'Toolbar', 'HideCopilot', 'Keeper') { $k.SetValue($n, [int][bool]$Opt[$n], 'DWord') }
     $k.SetValue('Version', $AppVersion); $k.SetValue('InstalledOn', (Get-Date -Format 's')); $k.Close()
 }
 
@@ -441,7 +434,7 @@ function Get-Settings {
     $k = $LM.OpenSubKey($SettingsKey)
     if (-not $k) { return $null }
     $o = [ordered]@{}
-    foreach ($n in 'ContextMenu', 'Toolbar', 'DefaultApp', 'HideCopilot', 'Keeper') { $o[$n] = [bool]$k.GetValue($n, 0) }
+    foreach ($n in 'ContextMenu', 'Toolbar', 'HideCopilot', 'Keeper') { $o[$n] = [bool]$k.GetValue($n, 0) }
     $k.Close(); return $o
 }
 
@@ -484,7 +477,7 @@ function Restart-Explorer {
 
 # ------------------------------------------------------------------ the three actions
 function Get-DefaultOptions {
-    [ordered]@{ ContextMenu = $true; Toolbar = $true; DefaultApp = $true; HideCopilot = $true; Keeper = $true }
+    [ordered]@{ ContextMenu = $true; Toolbar = $true; HideCopilot = $true; Keeper = $true }
 }
 
 function Invoke-Install($Opt) {
@@ -500,7 +493,6 @@ function Invoke-Install($Opt) {
     }
     if ($Opt.ContextMenu) { Set-ContextMenu $dir -IncludeUser } else { Remove-ContextMenu }
     if ($Opt.Toolbar) { Set-Toolbar $dir } else { Restore-Toolbar }
-    if ($Opt.DefaultApp) { Set-DefaultApp $dir } else { Write-Log 'Double-click: left as it is.' }
     if ($Opt.HideCopilot) { Set-Blocked $CopilotMenus -IncludeUser; Write-Log '"Ask Copilot" hidden from the right-click menu.' }
     else { Remove-Blocked $CopilotMenus -OnlyOurs }
     Copy-Self
@@ -591,7 +583,6 @@ function Get-UiOptions {
     [ordered]@{
         ContextMenu = $script:ChkMenu.Checked
         Toolbar     = $script:ChkToolbar.Checked
-        DefaultApp  = $script:ChkDefault.Checked
         HideCopilot = $script:ChkCopilot.Checked
         Keeper      = $script:ChkKeeper.Checked
     }
@@ -603,7 +594,6 @@ function Update-Status {
         [pscustomobject]@{ On = $st.SevenZip;      Yes = "7-Zip $($st.Version) is installed";                 No = '7-Zip is not installed (Install downloads it for free)' }
         [pscustomobject]@{ On = $st.Menu;          Yes = 'Right-click "Extract All" uses 7-Zip';               No = 'Right-click "Extract All" uses Windows' }
         [pscustomobject]@{ On = $st.Toolbar;       Yes = 'Toolbar "Extract all" button uses 7-Zip';            No = 'Toolbar "Extract all" button uses Windows' }
-        [pscustomobject]@{ On = $st.DoubleClick;   Yes = 'Double-click opens archives in 7-Zip';               No = 'Double-click opens archives in Windows (or another app)' }
         [pscustomobject]@{ On = $st.CopilotHidden; Yes = '"Ask Copilot" is hidden from the right-click menu';  No = '"Ask Copilot" is shown in the right-click menu' }
         [pscustomobject]@{ On = $st.Keeper;        Yes = 'Protected: Windows updates can''t undo the settings'; No = 'Not protected against Windows updates' }
     )
@@ -626,7 +616,7 @@ function Invoke-UiAction([string]$What) {
         if ($What -eq 'install') { Invoke-Install (Get-UiOptions) }
         else { Invoke-Undo -RemoveSevenZip:($script:ChkRemove.Checked) }
         Update-Status
-        $r = Show-Message "Done.`n`nRestart File Explorer now so the right-click menu updates?`n(Open File Explorer windows will close.)" 'YesNo' 'Question'
+        $r = Show-Message ("Done.`n`nRestart File Explorer now so the right-click menu updates?`n(Open File Explorer windows will close.)") 'YesNo' 'Question'
         if ($r -eq 'Yes') { Restart-Explorer; Write-Log 'All set. Right-click any archive to see it.' }
         else { Write-Log 'The changes show up after File Explorer or the PC restarts.' }
     } catch {
@@ -642,7 +632,7 @@ function Show-Window {
     Initialize-WinForms
     $f = New-Object System.Windows.Forms.Form
     $f.Text = "$AppName $AppVersion"
-    $f.ClientSize = New-Object System.Drawing.Size((S 600), (S 724))
+    $f.ClientSize = New-Object System.Drawing.Size((S 600), (S 678))
     $f.StartPosition = 'CenterScreen'
     $f.FormBorderStyle = 'FixedSingle'
     $f.MaximizeBox = $false
@@ -657,33 +647,32 @@ function Show-Window {
     $sub = New-Ctl Label 20 48 560 42 'Right-click any zip, rar or 7z file and choose "Extract All (7-Zip)", right under "Share with". Free. 7-Zip is downloaded from its official source if it is missing.'
     $sub.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 
-    $grpState = New-Ctl GroupBox 20 96 560 180 'Right now on this PC'
+    $grpState = New-Ctl GroupBox 20 96 560 155 'Right now on this PC'
     $script:StatusLabels = @()
-    for ($i = 0; $i -lt 6; $i++) {
+    for ($i = 0; $i -lt 5; $i++) {
         $l = New-Ctl Label 14 (26 + $i * 25) 535 24 ''
         $grpState.Controls.Add($l); $script:StatusLabels += $l
     }
 
-    $grpOpt = New-Ctl GroupBox 20 286 560 178 'What to set up'
+    $grpOpt = New-Ctl GroupBox 20 261 560 150 'What to set up'
     $script:ChkMenu    = New-Ctl CheckBox 14 26  535 26 'Right-click "Extract All (7-Zip)", right under "Share with"'
     $script:ChkToolbar = New-Ctl CheckBox 14 54  535 26 'Toolbar "Extract all" button uses 7-Zip'
-    $script:ChkDefault = New-Ctl CheckBox 14 82  535 26 'Double-click opens archives in 7-Zip'
-    $script:ChkCopilot = New-Ctl CheckBox 14 110 535 26 'Hide "Ask Copilot" from the right-click menu'
-    $script:ChkKeeper  = New-Ctl CheckBox 14 138 535 26 'Keep these settings after Windows updates (small startup task)'
+    $script:ChkCopilot = New-Ctl CheckBox 14 82  535 26 'Hide "Ask Copilot" from the right-click menu'
+    $script:ChkKeeper  = New-Ctl CheckBox 14 110 535 26 'Keep these settings after Windows updates (small startup task)'
     $saved = Get-Settings
     if (-not $saved) { $saved = Get-DefaultOptions }
-    $script:ChkMenu.Checked = $saved.ContextMenu; $script:ChkToolbar.Checked = $saved.Toolbar; $script:ChkDefault.Checked = $saved.DefaultApp
+    $script:ChkMenu.Checked = $saved.ContextMenu; $script:ChkToolbar.Checked = $saved.Toolbar
     $script:ChkCopilot.Checked = $saved.HideCopilot; $script:ChkKeeper.Checked = $saved.Keeper
-    $grpOpt.Controls.AddRange(@($script:ChkMenu, $script:ChkToolbar, $script:ChkDefault, $script:ChkCopilot, $script:ChkKeeper))
+    $grpOpt.Controls.AddRange(@($script:ChkMenu, $script:ChkToolbar, $script:ChkCopilot, $script:ChkKeeper))
 
-    $btnInstall = New-Ctl Button 20 476 170 40 'Install / Apply'
+    $btnInstall = New-Ctl Button 20 428 170 40 'Install / Apply'
     $btnInstall.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 10)
-    $btnUndo    = New-Ctl Button 200 476 260 40 'Undo - back to Windows default'
-    $btnClose   = New-Ctl Button 470 476 110 40 'Close'
-    $script:ChkRemove = New-Ctl CheckBox 200 520 380 26 'Undo also uninstalls 7-Zip'
+    $btnUndo    = New-Ctl Button 200 428 260 40 'Undo - back to Windows default'
+    $btnClose   = New-Ctl Button 470 428 110 40 'Close'
+    $script:ChkRemove = New-Ctl CheckBox 200 472 380 26 'Undo also uninstalls 7-Zip'
     $script:Buttons = @($btnInstall, $btnUndo, $btnClose)
 
-    $script:LogBox = New-Ctl TextBox 20 554 560 156 ''
+    $script:LogBox = New-Ctl TextBox 20 506 560 158 ''
     $script:LogBox.Multiline = $true; $script:LogBox.ReadOnly = $true; $script:LogBox.ScrollBars = 'Vertical'
     $script:LogBox.BackColor = [System.Drawing.Color]::FromArgb(246, 246, 246)
     $script:LogBox.Font = New-Object System.Drawing.Font('Consolas', 8.5)
@@ -691,7 +680,7 @@ function Show-Window {
     $btnInstall.Add_Click({ Invoke-UiAction 'install' })
     $btnUndo.Add_Click({
         $extra = if ($script:ChkRemove.Checked) { "`n`n7-Zip will be uninstalled too." } else { "`n`n7-Zip stays installed." }
-        if ((Show-Message ("Put the right-click menu, toolbar and double-click back to the Windows default?" + $extra) 'YesNo' 'Question') -eq 'Yes') { Invoke-UiAction 'undo' }
+        if ((Show-Message ("Put the right-click menu and toolbar back to the Windows default?" + $extra) 'YesNo' 'Question') -eq 'Yes') { Invoke-UiAction 'undo' }
     })
     $btnClose.Add_Click({ $script:Form.Close() })
     $f.Add_Shown({ $script:Form.Activate() })
@@ -733,7 +722,7 @@ if ($Silent -and ($Install -or $Undo)) {
     try {
         if ($Install) {
             $opt = Get-DefaultOptions
-            $opt.Toolbar = -not $NoToolbar; $opt.DefaultApp = -not $NoDefaultApp; $opt.HideCopilot = -not $NoCopilotHide; $opt.Keeper = -not $NoKeeper
+            $opt.Toolbar = -not $NoToolbar; $opt.HideCopilot = -not $NoCopilotHide; $opt.Keeper = -not $NoKeeper
             Invoke-Install $opt
         } else {
             Invoke-Undo -RemoveSevenZip:$RemoveSevenZip
