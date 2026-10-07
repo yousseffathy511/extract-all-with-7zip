@@ -25,12 +25,13 @@ That's it. Right-click any archive to see **Extract All (7-Zip)**.
 |---|---|
 | ✅ Right-click **Extract All (7-Zip)** | Right under *Share with*, replacing Windows' own *Extract All…* |
 | ✅ Toolbar **Extract all** button | Uses 7-Zip too |
-| ☑️ Double-click opens archives in 7-Zip | Optional |
 | ☑️ Hide *Ask Copilot* from the right-click menu | Optional |
 | ☑️ Survives Windows updates | Optional small startup task that puts the settings back if an update undoes them |
 | ✅ 7-Zip | Downloaded and installed automatically if missing (via `winget`, or from www.7-zip.org) |
 
 Works for zip, 7z, rar, tar, gz, tgz, bz2, xz, zst, lzh, arj, cpio, rpm, deb, dmg, squashfs and split `.001` archives. Select several archives to extract each one into its own folder.
+
+> **About double-click:** this tool changes the **right-click** menu and toolbar, not which app opens an archive when you **double-click** it. On a home (non-domain) PC, Windows only lets *you* set the double-click default — no app can do it silently (that's Windows stopping file-type hijacking). To make 7-Zip the double-click default, double-click an archive once → pick **7-Zip File Manager** → tick **Always**. The right-click *Extract All (7-Zip)* works either way.
 
 ## Going back to the Windows default
 
@@ -46,7 +47,7 @@ Run from an administrator PowerShell:
 ```powershell
 # install with all options, no window
 powershell -ExecutionPolicy Bypass -File ExtractAllWith7Zip.ps1 -Install -Silent
-#   options: -NoToolbar -NoDefaultApp -NoCopilotHide -NoKeeper -NoExplorerRestart
+#   options: -NoToolbar -NoCopilotHide -NoKeeper -NoExplorerRestart
 
 # undo
 powershell -ExecutionPolicy Bypass -File ExtractAllWith7Zip.ps1 -Undo -Silent [-RemoveSevenZip]
@@ -58,7 +59,6 @@ powershell -ExecutionPolicy Bypass -File ExtractAllWith7Zip.ps1 -Undo -Silent [-
 - `HKLM\SOFTWARE\Classes\SystemFileAssociations\.<type>\shell\extract`: the *Extract All (7-Zip)* entry. It's registered PC-wide on purpose, because Windows 11 only shows built-in command names like `extract` in the top part of its new right-click menu when they're registered for the whole PC.
 - `Shell Extensions\Blocked`: hides Windows' own Extract All handlers (and *Ask Copilot*, if chosen).
 - `Explorer\CommandStore\shell\Windows.CompressedFile.extract`: the toolbar button. Windows' original definition is saved first and restored by Undo, and the key is handed back to TrustedInstaller.
-- 7-Zip file-type registrations (if *double-click* is chosen). Windows 11 may ask you to confirm the default app once in *Settings → Default apps*.
 - `C:\Program Files\Extract All with 7-Zip\`, the startup task *Extract All with 7-Zip keeper*, and an entry in *Settings → Apps*.
 
 The whole tool is one readable PowerShell script: [`ExtractAllWith7Zip.ps1`](ExtractAllWith7Zip.ps1).
