@@ -1,0 +1,4 @@
+# Windows scripts must keep Windows line endings
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.txt text eol=crlf
