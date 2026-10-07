@@ -1,5 +1,5 @@
 <#
-    Extract All with 7-Zip   -   free tool, version 1.0.1
+    Extract All with 7-Zip   -   free tool, version 1.0.2
     =========================================================
     Makes Windows 11 use 7-Zip for "Extract All":
       * Right-click any archive -> "Extract All (7-Zip)", right under "Share with"
@@ -14,7 +14,8 @@
 
     This tool is not made by or affiliated with 7-Zip. 7-Zip is free software by Igor Pavlov.
 
-    How to use:  double-click "Extract All with 7-Zip.cmd"  (asks for administrator permission once)
+    How to use:  double-click "Extract All with 7-Zip.cmd" and click Yes - it sets everything up by itself.
+                 "Options and Undo.cmd" opens the window with the options and the Undo button.
 
     Command line (works from any PowerShell; asks for admin permission if needed):
       ExtractAllWith7Zip.ps1 -Install -Silent [-NoToolbar] [-NoCopilotHide] [-NoKeeper]
@@ -31,7 +32,7 @@ $ErrorActionPreference = 'Stop'
 
 # ------------------------------------------------------------------ constants
 $AppName      = 'Extract All with 7-Zip'
-$AppVersion   = '1.0.1'
+$AppVersion   = '1.0.2'
 $Marker       = 'hidden by Extract All with 7-Zip'
 $InstallDir   = Join-Path $env:ProgramFiles 'Extract All with 7-Zip'
 $ScriptName   = 'ExtractAllWith7Zip.ps1'
@@ -394,7 +395,7 @@ function Remove-DefaultApp {
     $LM.DeleteSubKeyTree($CapsKey, $false)
     Remove-DefaultAppPolicy
     Send-AssocChanged
-    Write-Log 'Double-click: 7-Zip default-apps policy removed (Windows default is back after you sign out and back in).'
+    Write-Log 'Cleaned up any 7-Zip file-type registrations.'
 }
 
 # ------------------------------------------------------------------ keeper, settings, Apps entry
@@ -742,6 +743,37 @@ if ($Undo) {
         Restart-Explorer
         [void](Show-Message 'Done. Windows is back to its default right-click menu and toolbar.' 'OK' 'Information')
     } catch { [void](Show-Message "Something went wrong:`n`n$($_.Exception.Message)" 'OK' 'Error') }
+    exit 0
+}
+
+if ($Install) {
+    # One-click install (the main "Extract All with 7-Zip.cmd"): no choices, everything set up,
+    # a small "please wait" box while it works, then one "All done" message.
+    Initialize-WinForms
+    $f = New-Object System.Windows.Forms.Form
+    $f.Text = "$AppName $AppVersion"
+    $f.ClientSize = New-Object System.Drawing.Size((S 540), (S 270))
+    $f.StartPosition = 'CenterScreen'; $f.FormBorderStyle = 'FixedSingle'
+    $f.ControlBox = $false; $f.TopMost = $true; $f.ShowInTaskbar = $true
+    $f.BackColor = [System.Drawing.Color]::White
+    $f.Font = New-Object System.Drawing.Font('Segoe UI', 9.5)
+    $head = New-Ctl Label 20 16 500 32 'Setting up "Extract All (7-Zip)" - please wait...'
+    $head.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 12)
+    $script:LogBox = New-Ctl TextBox 20 58 500 194 ''
+    $script:LogBox.Multiline = $true; $script:LogBox.ReadOnly = $true; $script:LogBox.ScrollBars = 'Vertical'
+    $script:LogBox.BackColor = [System.Drawing.Color]::FromArgb(246, 246, 246)
+    $script:LogBox.Font = New-Object System.Drawing.Font('Consolas', 8.5)
+    $f.Controls.AddRange(@($head, $script:LogBox))
+    $script:Form = $f
+    $f.Show(); Pump
+    $ok = $false; $err = ''
+    try { Invoke-Install (Get-DefaultOptions); Restart-Explorer; $ok = $true } catch { $err = $_.Exception.Message; Write-Log "ERROR: $err" }
+    $f.Close(); $script:Form = $null; $script:LogBox = $null
+    if ($ok) {
+        [void](Show-Message "All done!`n`nFrom now on, right-click any zip, rar or 7z file and choose:`n`n        Extract All (7-Zip)`n`nIt's right under ""Share with""." 'OK' 'Information')
+    } else {
+        [void](Show-Message "Something went wrong:`n`n$err`n`nPlease check the internet connection and try again." 'OK' 'Error')
+    }
     exit 0
 }
 
